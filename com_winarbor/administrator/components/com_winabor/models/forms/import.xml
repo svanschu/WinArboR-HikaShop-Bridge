@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form>
+    <fieldset>
+        <field
+                name="import_folder"
+                type="text"
+                filter="string"
+                label="COM_WINABOR_IMPORTFOLDER_LABEL"
+                default="/tmp"
+                />
+        <field
+                name="import_file"
+                type="text"
+                filter="string"
+                label="COM_WINABOR_IMPORTFILE_LABEL"
+                default="Artikeldaten.xml"
+                />
+    </fieldset>
+</form>
