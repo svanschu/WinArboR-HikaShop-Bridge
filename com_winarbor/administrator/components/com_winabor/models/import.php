@@ -92,16 +92,16 @@ class WinaborModelImport extends JModelAdmin
             JLog::add('XML Konnte nicht geladen werden', JLog::ERROR);
         }
 
-        //print_r($this->xml);
-        echo '<p>';
-
         if (!$this->importWarengruppen()) {
             JLog::add('Warengruppenimport fehlgeschlagen', JLog::ERROR);
         }
 
         $this->importArtikel();
 
-        die();
+//        die();
+        $app = JFactory::$application;
+        $app->enqueueMessage('Import successfull');
+        $app->redirect('index.php?option=com_winabor');
     }
 
     private function importArtikel()
@@ -111,8 +111,8 @@ class WinaborModelImport extends JModelAdmin
         //print_r($sorten);echo '<p>';
 
         foreach ($sorten as $sorte) {
-            print_r($sorte);
-            echo '<p>';
+            //print_r($sorte);
+            //echo '<p>';
             $sortennummer = 's' . $sorte->children()->{'Sortennummer'};
             $category = $sorte->xpath("Artikeldaten/Artikel")[0]->{"Artikelgruppe"};
 
@@ -128,8 +128,8 @@ class WinaborModelImport extends JModelAdmin
             $artikeldaten = $sorte->xpath("Artikeldaten")[0];
 
             foreach ($artikeldaten as $artikel) {
-                print_r($artikel);
-                echo '<p>';
+                //print_r($artikel);
+                //echo '<p>';
 
                 $characteristicNumber = $artikel->children()->{'Artikelnummer'};
                 $quantity = $artikel->children()->{'Bestand'};
@@ -137,8 +137,20 @@ class WinaborModelImport extends JModelAdmin
                 $mwst = str_replace(",", ".", $artikel->children()->{'Mwst'}) / 100;
                 $taxID = $this->getTaxId($mwst);
 
-                $price = str_replace(",", ".", $artikel->children()->{'Preis1'});
-                $price = $price - ($price * $mwst);
+                $prices = array();
+                $prices[] = array('price' => $this->getNetto($artikel->children()->{'Preis1'}, $mwst), 'minQuantity' => 0);
+
+                $i = 1;
+                do {
+                    $minQuantity = $artikel->children()->{'Staffel' . $i};
+
+                    $count = $minQuantity->count();
+
+                    if ($count > 0) {
+                        $i++;
+                        $prices[] = array('price' => $this->getNetto($artikel->children()->{'Preis' . $i}, $mwst), 'minQuantity' => (int)$minQuantity);
+                    }
+                } while ($count > 0);
 
                 $productCharacteristicID = $this->isProduct($characteristicNumber, $productId);
 
@@ -168,7 +180,7 @@ class WinaborModelImport extends JModelAdmin
                     $this->setVariantRelation($values);
 
                     //create price
-                    $this->createPrice($productCharacteristicID, $price);
+                    $this->createPrices($productCharacteristicID, $prices);
 
 
                 } else {
@@ -189,16 +201,11 @@ class WinaborModelImport extends JModelAdmin
                         ->where("characteristic_id=" . $characteristicID);
 
                     //update price
-                    $this->createPrice($productCharacteristicID, $price, false);
+                    $this->updatePrices($productCharacteristicID, $prices);
                 }
 
             }
         }
-
-        //die();
-        $app = JFactory::$application;
-        $app->enqueueMessage('Import successfull');
-        $app->redirect('index.php?option=com_winabor');
     }
 
     /**
@@ -569,7 +576,6 @@ class WinaborModelImport extends JModelAdmin
 
         if (!$catId) {
             JLog::add('MWST nicht gefunden, bitte erstellen: ' . $mwst, JLog::ERROR);
-            throw new RuntimeException('MWST nicht gefunden, bitte erstellen: ' . $mwst);
         }
 
         return $catId;
@@ -577,25 +583,105 @@ class WinaborModelImport extends JModelAdmin
 
     /**
      * @param $productCharacteristicID
-     * @param $price
-     * @param bool $new
+     * @param $prices
+     * @throws RuntimeException
      */
-    private function createPrice($productCharacteristicID, $price, $new = true)
+    private function createPrices($productCharacteristicID, $prices)
+    {
+        if (count($prices) > 0) {
+            $query = $this->db->getQuery(true);
+
+            $query->insert($this->db->quoteName("#__hikashop_price"))
+                ->columns("price_currency_id, price_product_id, price_value, price_min_quantity");
+
+            foreach ($prices as $price) {
+                $query->values("1, " . $productCharacteristicID . "," . $price['price'] . "," . $price['minQuantity']);
+            }
+            $this->db->setQuery($query)
+                ->execute();
+        } else {
+            throw new RuntimeException('createPrices failed because price array is empty');
+        }
+    }
+
+    /**
+     * @param $productCharacteristicID
+     * @param $prices
+     */
+    private function updatePrices($productCharacteristicID, $prices)
     {
         $query = $this->db->getQuery(true);
-        if ($new) {
-            $query->insert($this->db->quoteName("#__hikashop_price"));
-        } else {
-            $query->update($this->db->quoteName("#__hikashop_price"))
-                ->where($this->db->quoteName("price_product_id") . "=" . $productCharacteristicID);
+        $query->select($this->db->quoteName("price_id") . ',' . $this->db->quoteName("price_value") . ',' . $this->db->quoteName("price_min_quantity"))
+            ->from($this->db->quoteName("#__hikashop_price"))
+            ->where($this->db->quoteName("price_product_id") . "=" . $productCharacteristicID);
+        $this->db->setQuery($query);
+        $currentPrices = $this->db->loadAssocList();
+
+        foreach ($currentPrices as $ck => $currentPrice) {
+
+            foreach ($prices as $k => $price) {
+                if ($price['minQuantity'] == $currentPrice['price_min_quantity']) {
+                    echo '   drin      ';
+                    print_r($price['price'] . ' != ' . $currentPrice['price_value']);
+
+                    if (number_format($price['price'], 5) != $currentPrice['price_value']) {
+                        echo '   true   ';
+                        //update price in DB and unset
+                        $this->updatePrice($productCharacteristicID, $price);
+                    }
+                    unset($currentPrices[$ck]);
+                    unset($prices[$k]);
+                    break;
+                }
+            }
         }
-        $query->set($this->db->quoteName("price_currency_id") . "=1")
-            ->set($this->db->quoteName("price_product_id") . "=" . $productCharacteristicID)
-            ->set($this->db->quoteName("price_value") . "=" . $price)
-            ->set($this->db->quoteName("price_min_quantity") . "=0");
+
+        //still new prices here?
+        if (count($prices) > 0) {
+            $this->createPrices($productCharacteristicID, $prices);
+        }
+
+        //delete old prices if there are still
+        if (count($currentPrices) > 0) {
+            foreach ($currentPrices as $currentPrice) {
+                $query = $this->db->getQuery(true);
+                $query->delete($this->db->quoteName("#__hikashop_price"))
+                    ->where($this->db->quoteName("price_value") . '=' . $currentPrice['price_id']);
+                $this->db->setQuery($query)
+                    ->execute();
+
+            }
+        }
+    }
+
+    /**
+     * @param $price1
+     * @param $mwst
+     * @return mixed
+     */
+    private
+    function getNetto($price1, $mwst)
+    {
+        $price1 = str_replace(",", ".", $price1);
+        $price1 = $price1 - ($price1 * $mwst);
+        return $price1;
+    }
+
+    /**
+     * @param $productCharacteristicID
+     * @param $price
+     */
+    private
+    function updatePrice($productCharacteristicID, $price)
+    {
+        $query = $this->db->getQuery(true);
+        $query->update($this->db->quoteName("#__hikashop_price"))
+            ->set($this->db->quoteName("price_currency_id") . "=1")
+            ->set($this->db->quoteName("price_value") . "=" . $price['price'])
+            ->where($this->db->quoteName("price_min_quantity") . "=" . $price['minQuantity'])
+            ->where($this->db->quoteName("price_product_id") . "=" . $productCharacteristicID);
         //echo $price;
         $this->db->setQuery($query)
             ->execute();
-        //print_r($this->db);die();
     }
 }
