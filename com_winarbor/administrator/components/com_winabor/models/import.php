@@ -98,7 +98,7 @@ class WinaborModelImport extends JModelAdmin
 
         $this->importArtikel();
 
-//        die();
+        //die();
         $app = JFactory::$application;
         $app->enqueueMessage('Import successfull');
         $app->redirect('index.php?option=com_winabor');
@@ -116,13 +116,19 @@ class WinaborModelImport extends JModelAdmin
             $sortennummer = 's' . $sorte->children()->{'Sortennummer'};
             $category = $sorte->xpath("Artikeldaten/Artikel")[0]->{"Artikelgruppe"};
 
+            $sorteName = $sorte->children()->{'Bezeichnung1'};
+
+            $pictures = $sorte->children()->{'Bilder'}[0];
+
             $productId = $this->isProduct($sortennummer);
             if (!$productId) {
                 //create product
-                $productId = $this->createProduct($sorte->children()->{'Bezeichnung1'}, $sorte->children()->{'Beschreibung'}, $sortennummer, $category);
+                $productId = $this->createProduct($sorteName, $sorte->children()->{'Beschreibung'}, $sortennummer, $category);
+                $this->setPictures($pictures, $sorteName, $productId);
             } else {
                 //update product
-                $this->updateProduct($sorte->children()->{'Bezeichnung1'}, $sorte->children()->{'Beschreibung'}, $productId, $category);
+                $this->updateProduct($sorteName, $sorte->children()->{'Beschreibung'}, $productId, $category);
+                $this->updatePictures($pictures, $sorteName, $productId);
             }
 
             $artikeldaten = $sorte->xpath("Artikeldaten")[0];
@@ -482,7 +488,7 @@ class WinaborModelImport extends JModelAdmin
 
         if (!$categoryID) {
             JLog::add('Category not found: ' . $category, JLog::ERROR);
-            throw new RuntimeException('Category not found: ' . $category);
+            return;
         }
 
         $query = $this->db->getQuery(true);
@@ -618,14 +624,9 @@ class WinaborModelImport extends JModelAdmin
         $currentPrices = $this->db->loadAssocList();
 
         foreach ($currentPrices as $ck => $currentPrice) {
-
             foreach ($prices as $k => $price) {
                 if ($price['minQuantity'] == $currentPrice['price_min_quantity']) {
-                    echo '   drin      ';
-                    print_r($price['price'] . ' != ' . $currentPrice['price_value']);
-
                     if (number_format($price['price'], 5) != $currentPrice['price_value']) {
-                        echo '   true   ';
                         //update price in DB and unset
                         $this->updatePrice($productCharacteristicID, $price);
                     }
@@ -683,5 +684,119 @@ class WinaborModelImport extends JModelAdmin
         //echo $price;
         $this->db->setQuery($query)
             ->execute();
+    }
+
+    /**
+     * @param $pictures
+     * @param $sorteName
+     * @param $productId
+     */
+    private function setPictures($pictures, $sorteName, $productId)
+    {
+        if (!empty($pictures) && $pictures->count() > 0) {
+            $query = $this->db->getQuery(true);
+            $query->insert($this->db->quoteName('#__hikashop_file'))
+                ->columns(
+                    $this->db->quoteName('file_name') . ', ' .
+                    $this->db->quoteName('file_description') . ', ' .
+                    $this->db->quoteName('file_path') . ', ' .
+                    $this->db->quoteName('file_type') . ', ' .
+                    $this->db->quoteName('file_ref_id') . ', ' .
+                    $this->db->quoteName('file_ordering'));
+            foreach ($pictures as $picture) {
+                $pictureDesc = (string)$picture->children()->{'Beschreibung'}[0];
+
+                $query->values(
+                    $this->db->quote($sorteName) . ', ' .
+                    $this->db->quote(empty($pictureDesc) ? 'Picture of ' . $sorteName : $pictureDesc) . ', ' .
+                    $this->db->quote((string)$picture->children()->{'Datei'}[0]) . ', ' .
+                    $this->db->quote('product') . ', ' .
+                    $this->db->quote($productId) . ', ' .
+                    $this->db->quote((int)$picture->attributes()->{'NR'}[0]));
+            }
+
+            $this->db->setQuery($query)
+                ->execute();
+        }
+    }
+
+    /**
+     * @param $file_id
+     * @param $picture
+     * @param $sorteName
+     */
+    private function updatePicture($file_id, $picture, $sorteName)
+    {
+        $pictureDesc = (string)$picture->children()->{'Beschreibung'}[0];
+
+        $query = $this->db->getQuery(true);
+        $query->update($this->db->quoteName('#__hikashop_file'))
+            ->set($this->db->quoteName('file_name') . '=' . $this->db->quote($sorteName))
+            ->set($this->db->quoteName('file_description') . '= ' . $this->db->quote(empty($pictureDesc) ? 'Picture of ' . $sorteName : $pictureDesc))
+            ->set($this->db->quoteName('file_path') . '=' . (string)$picture->children()->{'Datei'}[0])
+            ->set($this->db->quoteName('file_ordering') . '=' . (int)$picture->attributes()->{'NR'}[0])
+            ->where($this->db->quoteName('file_id') . '=' . $file_id);
+        $this->db->setQuery($query)
+            ->execute();
+    }
+
+    /**
+     * @param $pictures
+     * @param $sorteName
+     * @param $productId
+     */
+    private function updatePictures($pictures, $sorteName, $productId)
+    {
+        //get picture for the sort
+        $currentPictures = $this->getPictures($productId);
+
+        if (count($currentPictures) > 0) {
+            foreach ($currentPictures as $ck => $currentPicture) {
+                foreach ($pictures as $k => $picture) {
+                    if ((string)$picture->children()->{'Datei'}[0] == $currentPicture['file_path']) {
+                        if ((int)$picture->attributes()->{'NR'}[0] != $currentPicture['file_ordering']) {
+                            //update price in DB and unset
+                            $this->updatePicture($currentPicture['file_id'], $picture, $sorteName);
+                        }
+                        unset($currentPictures[$ck]);
+                        unset($picture->{0});
+                        break;
+                    }
+                }
+            }
+        }
+
+        //still new prices here?
+        if (count($pictures) > 0) {
+            $this->setPictures($pictures, $sorteName, $productId);
+        }
+
+        //delete old prices if there are still
+        if (count($currentPictures) > 0) {
+            foreach ($currentPictures as $currentPicture) {
+                $query = $this->db->getQuery(true);
+                $query->delete($this->db->quoteName("#__hikashop_file"))
+                    ->where($this->db->quoteName('file_id') . '=' . $currentPicture['file_id']);
+                $this->db->setQuery($query)
+                    ->execute();
+            }
+        }
+    }
+
+    /**
+     * @param $productId
+     * @return mixed
+     */
+    private function getPictures($productId)
+    {
+        $query = $this->db->getQuery(true);
+        $query->select(
+            $this->db->quoteName('file_id') . ', ' .
+            $this->db->quoteName('file_path') . ', ' .
+            $this->db->quoteName('file_ordering'))
+            ->from($this->db->quoteName('#__hikashop_file'))
+            ->where($this->db->quoteName('file_ref_id') . '=' . $productId);
+        $this->db->setQuery($query);
+        return $this->db->loadAssocList();
     }
 }
