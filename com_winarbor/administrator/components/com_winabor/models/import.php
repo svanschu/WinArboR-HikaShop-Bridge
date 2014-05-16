@@ -113,7 +113,7 @@ class WinaborModelImport extends JModelAdmin
         foreach ($sorten as $sorte) {
             //print_r($sorte);
             //echo '<p>';
-            $sortennummer = 's' . $sorte->children()->{'Sortennummer'};
+            $sortennummer = 's' . $sorte->children()->{'Kennung'} . $sorte->children()->{'Sortennummer'};
             $category = $sorte->xpath("Artikeldaten/Artikel")[0]->{"Artikelgruppe"};
 
             $sorteName = $sorte->children()->{'Bezeichnung1'};
@@ -137,7 +137,7 @@ class WinaborModelImport extends JModelAdmin
                 //print_r($artikel);
                 //echo '<p>';
 
-                $characteristicNumber = $artikel->children()->{'Artikelnummer'};
+                $characteristicNumber = $artikel->children()->{'Kennung'} . $artikel->children()->{'Artikelnummer'};
                 $quantity = $artikel->children()->{'Bestand'};
 
                 $mwst = str_replace(",", ".", $artikel->children()->{'Mwst'}) / 100;

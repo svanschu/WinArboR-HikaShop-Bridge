@@ -189,7 +189,9 @@ if (!empty($this->orders)) {
              * [order_product_shipping_params] =>
              */
             $taxInfo = unserialize($product->order_product_tax_info);
-            //$productOptions = unserialize($product->order_product_options);
+
+            $kennung = substr($product->order_product_code, 0, 1);
+            $productCode = substr($product->order_product_code, 1);
 
             $item->addChild('ID', $product->order_product_id);
             $item->addChild('COUNT', $product->order_product_quantity);
@@ -197,11 +199,9 @@ if (!empty($this->orders)) {
             //$item->addChild('TAXTYP', $product->order_product_id);
             $item->addChild('NETTO', $product->order_product_price);
             $item->addChild('MWST', $product->order_product_tax);
-            //$item->addChild('BRUTTO', $product->order_product_id);
-            //$item->addChild('SORTEHNR', $product->order_product_code);
             //TODO Kennung erkennen und eintragen
-            $item->addChild('KENNUNG', 'P');
-            $item->addChild('ARTIKELNUMMER', $product->order_product_code);
+            $item->addChild('KENNUNG', $kennung);
+            $item->addChild('ARTIKELNUMMER', $productCode);
             $item->addChild('BEZEICHNUNG1', strip_tags($product->order_product_name));
         }
 
