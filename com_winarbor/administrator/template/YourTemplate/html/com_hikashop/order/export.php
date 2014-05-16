@@ -199,7 +199,6 @@ if (!empty($this->orders)) {
             //$item->addChild('TAXTYP', $product->order_product_id);
             $item->addChild('NETTO', $product->order_product_price);
             $item->addChild('MWST', $product->order_product_tax);
-            //TODO Kennung erkennen und eintragen
             $item->addChild('KENNUNG', $kennung);
             $item->addChild('ARTIKELNUMMER', $productCode);
             $item->addChild('BEZEICHNUNG1', strip_tags($product->order_product_name));
