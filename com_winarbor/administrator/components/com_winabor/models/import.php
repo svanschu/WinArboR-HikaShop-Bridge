@@ -131,6 +131,11 @@ class WinaborModelImport extends JModelAdmin
                 $this->updatePictures($pictures, $sorteName, $productId);
             }
 
+            if (!empty($sorte->children()->{'ArtikelAttribute'})) {
+                //set Artikel Attributes
+                $this->setCostumFields($productId, $sorte->children()->{'ArtikelAttribute'}[0]);
+            }
+
             $artikeldaten = $sorte->xpath("Artikeldaten")[0];
 
             foreach ($artikeldaten as $artikel) {
@@ -798,5 +803,42 @@ class WinaborModelImport extends JModelAdmin
             ->where($this->db->quoteName('file_ref_id') . '=' . $productId);
         $this->db->setQuery($query);
         return $this->db->loadAssocList();
+    }
+
+    private function setCostumFields($productId, $artikelAttributes)
+    {
+        $query = $this->db->getQuery(true);
+        $query->select(
+            $this->db->quoteName('field_id') . ',' .
+            $this->db->quoteName('field_realname') . ',' .
+            $this->db->quoteName('field_namekey') . ',' .
+            $this->db->quoteName('field_value'))
+            ->from($this->db->quoteName('#__hikashop_field'))
+            ->where($this->db->quoteName('field_table') . '=' . $this->db->quote('product'));
+        $this->db->setQuery($query);
+        $costumFields = $this->db->loadAssocList();
+
+        foreach ($artikelAttributes as $k => $artikelAttribute) {
+            $artikelAttribute = explode("|", $artikelAttribute);
+            foreach ($costumFields as $kk => $costumField) {
+                if ($artikelAttribute[0] == $costumField['field_realname']){
+                    $fieldValues = explode("\n", $costumField['field_value']);
+                    foreach($fieldValues as $fieldValue) {
+                        $fieldValue = substr($fieldValue, strpos($fieldValue, '::')+2, (strrpos($fieldValue, '::')-strpos($fieldValue, '::')-2));
+                        if ($artikelAttribute[1] == $fieldValue ) {
+                            //set attribute to product
+                            $query = $this->db->getQuery(true);
+                            $query->update($this->db->quoteName('#__hikashop_product'))
+                                ->set($this->db->quoteName($costumField['field_namekey']).'='.$this->db->quote($artikelAttribute[1]))
+                                ->where($this->db->quoteName('product_id') .'='. $productId);
+                            $this->db->setQuery($query)
+                                ->execute();
+                            continue;
+                        }
+                    }
+                    continue;
+                }
+            }
+        }
     }
 }
