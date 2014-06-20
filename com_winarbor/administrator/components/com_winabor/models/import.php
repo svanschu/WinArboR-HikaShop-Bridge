@@ -98,6 +98,8 @@ class WinaborModelImport extends JModelAdmin
 
         $this->importArtikel();
 
+        $this->createRelations();
+
         //die();
         $app = JFactory::$application;
         $app->enqueueMessage('Import successfull');
@@ -821,16 +823,16 @@ class WinaborModelImport extends JModelAdmin
         foreach ($artikelAttributes as $k => $artikelAttribute) {
             $artikelAttribute = explode("|", $artikelAttribute);
             foreach ($costumFields as $kk => $costumField) {
-                if ($artikelAttribute[0] == $costumField['field_realname']){
+                if ($artikelAttribute[0] == $costumField['field_realname']) {
                     $fieldValues = explode("\n", $costumField['field_value']);
-                    foreach($fieldValues as $fieldValue) {
-                        $fieldValue = substr($fieldValue, strpos($fieldValue, '::')+2, (strrpos($fieldValue, '::')-strpos($fieldValue, '::')-2));
-                        if ($artikelAttribute[1] == $fieldValue ) {
+                    foreach ($fieldValues as $fieldValue) {
+                        $fieldValue = substr($fieldValue, strpos($fieldValue, '::') + 2, (strrpos($fieldValue, '::') - strpos($fieldValue, '::') - 2));
+                        if ($artikelAttribute[1] == $fieldValue) {
                             //set attribute to product
                             $query = $this->db->getQuery(true);
                             $query->update($this->db->quoteName('#__hikashop_product'))
-                                ->set($this->db->quoteName($costumField['field_namekey']).'='.$this->db->quote($artikelAttribute[1]))
-                                ->where($this->db->quoteName('product_id') .'='. $productId);
+                                ->set($this->db->quoteName($costumField['field_namekey']) . '=' . $this->db->quote($artikelAttribute[1]))
+                                ->where($this->db->quoteName('product_id') . '=' . $productId);
                             $this->db->setQuery($query)
                                 ->execute();
                             continue;
@@ -839,6 +841,44 @@ class WinaborModelImport extends JModelAdmin
                     continue;
                 }
             }
+        }
+    }
+
+    private function createRelations()
+    {
+        $sorten = $this->xml->xpath("Sortendaten")[0];
+
+        foreach ($sorten as $sorte) {
+            $sortennummer = 's' . $sorte->children()->{'Kennung'} . $sorte->children()->{'Sortennummer'};
+
+            $ersatzSorten = $sorte->children()->{'Ersatzsorten'}[0];
+
+            if (!empty($ersatzSorten)) {
+                $productId = $this->isProduct($sortennummer);
+                if ($productId) {
+                    foreach ($ersatzSorten as $ersatzSorte) {
+                        $ersatzSortennummer = 's' . $sorte->children()->{'Kennung'} . (string)$ersatzSorte;
+                        $ersatzSorteID = $this->isProduct($ersatzSortennummer);
+                        if ($ersatzSorteID) {
+                            $query = $this->db->getQuery(true);
+                            $query->select($this->db->quoteName('product_id'))
+                                ->from($this->db->quoteName('#__hikashop_product_related'))
+                                ->where($this->db->quoteName('product_id') . '=' . $productId)
+                                ->where($this->db->quoteName('product_related_id') . '=' . $ersatzSorteID);
+                            $this->db->setQuery($query);
+                            if ($this->db->getNumRows() <= 0) {
+                                $query = $this->db->getQuery(true);
+                                $query->insert($this->db->quoteName('#__hikashop_product_related'))
+                                    ->columns($this->db->quoteName('product_related_id') . ',' . $this->db->quoteName('product_id'))
+                                    ->values($ersatzSorteID . ',' . $productId);
+                                $this->db->setQuery($query)
+                                    ->execute();
+                            }
+                        }
+                    }
+                }
+            }
+
         }
     }
 }
