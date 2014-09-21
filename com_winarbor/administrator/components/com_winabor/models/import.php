@@ -663,16 +663,23 @@ class WinaborModelImport extends JModelAdmin
     }
 
     /**
-     * @param $price1
+     * @param $brutto
      * @param $mwst
      * @return mixed
+     *
+     * N: Netto
+     * B: Brutto
+     * p: Mehrwertsteuersatz
+     * N =  B / (p / 100 + 1)
+     * B = N * (p  /100 + 1)
+     * Mwst. = N * (p / 100)
      */
     private
-    function getNetto($price1, $mwst)
+    function getNetto($brutto, $mwst)
     {
-        $price1 = str_replace(",", ".", $price1);
-        $price1 = $price1 - ($price1 * $mwst);
-        return $price1;
+        $brutto = str_replace(",", ".", $brutto);
+        $netto = $brutto / ($mwst / 100 + 1);
+        return $netto;
     }
 
     /**
