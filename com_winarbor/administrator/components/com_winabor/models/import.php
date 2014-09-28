@@ -122,14 +122,18 @@ class WinaborModelImport extends JModelAdmin
 
             $pictures = $sorte->children()->{'Bilder'}[0];
 
+            $artikeldaten = $sorte->xpath("Artikeldaten")[0];
+            $mwst = str_replace(",", ".", $artikeldaten->Artikel[0]->children()->{'Mwst'}) / 100;
+            $taxID = $this->getTaxId($mwst);
+
             $productId = $this->isProduct($sortennummer);
             if (!$productId) {
                 //create product
-                $productId = $this->createProduct($sorteName, $sorte->children()->{'Beschreibung'}, $sortennummer, $category);
+                $productId = $this->createProduct($sorteName, $sorte->children()->{'Beschreibung'}, $sortennummer, $category, -1, 0, 'main', 1, $taxID);
                 $this->setPictures($pictures, $sorteName, $productId);
             } else {
                 //update product
-                $this->updateProduct($sorteName, $sorte->children()->{'Beschreibung'}, $productId, $category);
+                $this->updateProduct($sorteName, $sorte->children()->{'Beschreibung'}, $productId, $category, -1, 0, 'main', 1, $taxID);
                 $this->updatePictures($pictures, $sorteName, $productId);
             }
 
@@ -137,8 +141,6 @@ class WinaborModelImport extends JModelAdmin
                 //set Artikel Attributes
                 $this->setCostumFields($productId, $sorte->children()->{'ArtikelAttribute'}[0]);
             }
-
-            $artikeldaten = $sorte->xpath("Artikeldaten")[0];
 
             foreach ($artikeldaten as $artikel) {
                 //print_r($artikel);
@@ -678,7 +680,8 @@ class WinaborModelImport extends JModelAdmin
     function getNetto($brutto, $mwst)
     {
         $brutto = str_replace(",", ".", $brutto);
-        $netto = $brutto / ($mwst / 100 + 1);
+        //$netto = round( ($brutto / ($mwst + 1)), 2);
+        $netto = $brutto / ($mwst + 1);
         return $netto;
     }
 
