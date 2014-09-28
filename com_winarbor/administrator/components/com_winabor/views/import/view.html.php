@@ -54,9 +54,13 @@ class WinaborViewImport extends JViewLegacy
         $input = JFactory::getApplication()->input;
         $input->set('hidemainmenu', true);
 
+        $user = JFactory::getUser();
+
         JToolbarHelper::title(JText::_('COM_WINABOR_IMPORT'));
 
-        JToolbarHelper::save('import.save', 'COM_WINABOR_STARTIMPORT');
+        if ($user->authorise('winabor.import', 'com_winabor')) {
+            JToolbarHelper::save('import.save', 'COM_WINABOR_STARTIMPORT');
+        }
 
         JToolbarHelper::cancel();
 

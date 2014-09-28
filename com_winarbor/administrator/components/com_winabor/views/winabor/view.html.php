@@ -53,8 +53,12 @@ class WinaborViewWinabor extends JViewLegacy
 
         JToolbarHelper::title(JText::_('COM_WINABOR'));
 
-        JToolbarHelper::addNew('import.new', 'COM_WINABOR_IMPORT');
+        if ($user->authorise('winabor.import', 'com_winabor')) {
+            JToolbarHelper::addNew('import.new', 'COM_WINABOR_IMPORT');
+        }
 
-        JToolbarHelper::preferences('com_winabor');
+        if ($user->authorise('core.admin', 'com_winabor')) {
+            JToolbarHelper::preferences('com_winabor');
+        }
     }
 }
