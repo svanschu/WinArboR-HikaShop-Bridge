@@ -20,7 +20,7 @@ $export = hikashop_get('helper.spreadsheet');
 $export->init($format, 'hikashop_export', $separator, $force_quote);*/
 jimport('joomla.filesystem.folder');
 
-$exportFolder = JPATH_ROOT . '/hikaExport';
+$exportFolder = JPATH_ROOT . '/hikaExport/Bestellungen';
 if (!JFolder::exists($exportFolder)) {
     if (!JFolder::create($exportFolder)) {
         JLog::add("Can't create folder", JLog::ERROR);
@@ -68,8 +68,9 @@ if (!empty($this->orders)) {
         $formular = $xml->addChild('FORMULAR');
         $formular->addChild('FN', $order->billing_address_company)->addAttribute('TITLE', 'Firma');
         $formular->addChild('VN', $order->billing_address_firstname)->addAttribute('TITLE', 'Vorname');
-        $formular->addChild('NA1', $order->billing_address_middle_name)->addAttribute('TITLE', 'Name 1');
-        $formular->addChild('NA2', $order->billing_address_lastname)->addAttribute('TITLE', 'Name 2');
+        $formular->addChild('NA1', $order->billing_address_lastname)->addAttribute('TITLE', 'Name 1');
+        //$formular->addChild('NA1', $order->billing_address_middle_name)->addAttribute('TITLE', 'Name 1');
+        //$formular->addChild('NA2', $order->billing_address_lastname)->addAttribute('TITLE', 'Name 2');
         $formular->addChild('ST', $order->billing_address_street)->addAttribute('TITLE', 'Strasse');
         $formular->addChild('PL', $order->billing_address_post_code)->addAttribute('TITLE', 'PLZ');
         $formular->addChild('OR', $order->billing_address_city)->addAttribute('TITLE', 'Ort');
